@@ -115,17 +115,29 @@ function normalizeApiResponse(data) {
   const gradcamOverlay =
     data.gradcam_overlay_b64 ||
     data.gradcam?.overlay_b64 ||
+    data.compat?.gradcam_overlay_b64 ||
     data.compat?.gradcam?.overlay_b64 ||
     null;
 
   const gradcamHeatmap =
     data.gradcam_heatmap_b64 ||
     data.gradcam?.heatmap_b64 ||
+    data.compat?.gradcam_heatmap_b64 ||
     data.compat?.gradcam?.heatmap_b64 ||
     null;
 
-  const gradcamLayer = data.gradcam?.layer || data.compat?.gradcam?.layer || null;
-  const gradcamEnabled = Boolean(gradcamOverlay || gradcamHeatmap);
+  const gradcamLayer =
+    data.gradcam_layer ||
+    data.gradcam?.layer ||
+    data.compat?.gradcam_layer ||
+    data.compat?.gradcam?.layer ||
+    null;
+
+  const gradcamEnabled = Boolean(
+    (data.gradcam_enabled ?? data.gradcam?.enabled ?? data.compat?.gradcam_enabled ?? data.compat?.gradcam?.enabled) ??
+      (gradcamOverlay || gradcamHeatmap)
+  );
+
   const gradcamError = data.gradcam?.error || data.compat?.gradcam?.error || null;
 
   return {
@@ -133,6 +145,9 @@ function normalizeApiResponse(data) {
     session_id: data.session_id || null,
     prediction: { class: className, confidence, description },
     all_probabilities,
+    security: data.security || null,
+    storage: data.storage || null,
+    elapsed_ms: typeof data.elapsed_ms === "number" ? data.elapsed_ms : null,
     gradcam: {
       enabled: gradcamEnabled,
       layer: gradcamLayer,
@@ -140,9 +155,6 @@ function normalizeApiResponse(data) {
       heatmap_b64: gradcamHeatmap,
       error: gradcamError,
     },
-    security: data.security || null,
-    storage: data.storage || null,
-    elapsed_ms: typeof data.elapsed_ms === "number" ? data.elapsed_ms : null,
   };
 }
 
@@ -577,14 +589,19 @@ export default function App() {
         <div className="diagnosis-description">{safeDesc}</div>
       </div>
 
-      {prediction?.gradcam?.overlay_b64 ? (
+      {prediction?.gradcam?.error && !prediction?.gradcam?.enabled ? (
+        <Alert variant="warning" className="mt-3">
+          <strong>Grad-CAM:</strong> {String(prediction.gradcam.error)}
+        </Alert>
+      ) : null}
+
+      {prediction?.gradcam?.overlay_b64 || prediction?.gradcam?.heatmap_b64 ? (
         <div className="probability-section" style={{ marginTop: 16 }}>
           <h5 className="mb-3">Grad-CAM Explanation</h5>
 
-          {prediction.gradcam.layer ? (
+          {prediction?.gradcam?.layer ? (
             <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
-              Layer:{" "}
-              <span style={{ fontFamily: "monospace" }}>{prediction.gradcam.layer}</span>
+              Layer: <span style={{ fontFamily: "monospace" }}>{prediction.gradcam.layer}</span>
             </div>
           ) : null}
 
@@ -598,24 +615,20 @@ export default function App() {
                   style={{ width: "100%", borderRadius: 12 }}
                 />
               ) : (
-                <p className="text-muted mb-0">Original preview not available.</p>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>No preview available</div>
               )}
             </div>
 
             <div>
-              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Grad-CAM Overlay</div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Grad-CAM</div>
               <img
-                src={`data:image/png;base64,${prediction.gradcam.overlay_b64}`}
-                alt="Grad-CAM Overlay"
+                src={`data:image/png;base64,${prediction.gradcam.overlay_b64 || prediction.gradcam.heatmap_b64}`}
+                alt="Grad-CAM"
                 style={{ width: "100%", borderRadius: 12 }}
               />
             </div>
           </div>
         </div>
-      ) : prediction?.gradcam?.error ? (
-        <Alert variant="warning" className="mt-3">
-          <strong>Grad-CAM unavailable:</strong> {String(prediction.gradcam.error)}
-        </Alert>
       ) : null}
 
       <div className="probability-section">
