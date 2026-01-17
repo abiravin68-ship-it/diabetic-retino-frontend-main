@@ -158,6 +158,8 @@ export default function App() {
   const [error, setError] = useState("");
 
   const [wantGradcam, setWantGradcam] = useState(false);
+  const [gradcamLoading, setGradcamLoading] = useState(false);
+  const [gradcamNotice, setGradcamNotice] = useState("");
 
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const isCoolingDown = cooldownUntil > Date.now();
@@ -323,21 +325,24 @@ export default function App() {
 
     setLoading(true);
     setError("");
+    setGradcamNotice("");
+    setGradcamLoading(false);
     setPrediction(null);
 
-    const formData = new FormData();
-    formData.append("file", selectedFile);
+    const makeFormData = () => {
+      const fd = new FormData();
+      fd.append("file", selectedFile);
+      return fd;
+    };
 
     try {
+      // Phase 1: Always do the fast prediction first.
       let lastErr = null;
+      let baseResult = null;
 
-      const predictPaths = wantGradcam
-        ? ["/api/predict?gradcam=1", ...PREDICT_PATHS]
-        : PREDICT_PATHS;
-
-      for (const path of predictPaths) {
+      for (const path of PREDICT_PATHS) {
         try {
-          const res = await axios.post(joinUrl(API_BASE, path), formData, {
+          const res = await axios.post(joinUrl(API_BASE, path), makeFormData(), {
             timeout: 300000,
             withCredentials: false,
           });
@@ -348,14 +353,49 @@ export default function App() {
             return;
           }
 
+          baseResult = normalized;
           setPrediction(normalized);
-          return;
+          break;
         } catch (e) {
           lastErr = e;
         }
       }
 
-      throw lastErr;
+      if (!baseResult) throw lastErr;
+
+      // Phase 2: Optional Grad-CAM. Never fail the whole request if it errors.
+      if (wantGradcam) {
+        setGradcamLoading(true);
+        try {
+          const res2 = await axios.post(
+            joinUrl(API_BASE, "/api/predict?gradcam=1"),
+            makeFormData(),
+            {
+              timeout: 300000,
+              withCredentials: false,
+            }
+          );
+
+          const normalized2 = normalizeApiResponse(res2.data);
+          if (normalized2.success && normalized2.gradcam_image) {
+            setPrediction((prev) => ({
+              ...(prev || baseResult),
+              gradcam_image: normalized2.gradcam_image,
+            }));
+          } else {
+            setGradcamNotice(
+              "Grad-CAM was requested, but the backend did not return an image."
+            );
+          }
+        } catch (e2) {
+          console.error("Grad-CAM request failed", e2);
+          setGradcamNotice(
+            "Grad-CAM failed (backend error or resource limit). Showing prediction without Grad-CAM."
+          );
+        } finally {
+          setGradcamLoading(false);
+        }
+      }
     } catch (e) {
       const { status, message } = extractServerError(e);
 
@@ -383,6 +423,7 @@ export default function App() {
     setSelectedFile(null);
     setPrediction(null);
     setError("");
+    setGradcamNotice("");
     setPreview((prevUrl) => {
       if (prevUrl) URL.revokeObjectURL(prevUrl);
       return null;
@@ -601,22 +642,36 @@ export default function App() {
         )}
       </div>
 
-      {prediction.gradcam_image ? (
+      {wantGradcam ? (
         <div className="mt-4">
           <h5 className="mb-2">Grad-CAM Visualization</h5>
-          <img
-            src={prediction.gradcam_image}
-            alt="Grad-CAM"
-            style={{ width: "100%", borderRadius: 12 }}
-          />
-          <p className="text-muted mt-2 mb-0" style={{ fontSize: 12 }}>
-            Highlighted regions indicate areas that most influenced the model’s decision.
-          </p>
+
+          {prediction.gradcam_image ? (
+            <>
+              <img
+                src={prediction.gradcam_image}
+                alt="Grad-CAM"
+                style={{ width: "100%", borderRadius: 12 }}
+              />
+              <p className="text-muted mt-2 mb-0" style={{ fontSize: 12 }}>
+                Highlighted regions indicate areas that most influenced the model’s decision.
+              </p>
+            </>
+          ) : gradcamLoading ? (
+            <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: 12 }}>
+              <Spinner animation="border" size="sm" />
+              <span>Generating Grad-CAM…</span>
+            </div>
+          ) : gradcamNotice ? (
+            <Alert variant="warning" className="mt-2" style={{ fontSize: 12 }}>
+              {gradcamNotice}
+            </Alert>
+          ) : (
+            <p className="text-muted mt-2 mb-0" style={{ fontSize: 12 }}>
+              Grad-CAM was requested, but the backend did not return an image.
+            </p>
+          )}
         </div>
-      ) : wantGradcam ? (
-        <p className="text-muted mt-3 mb-0" style={{ fontSize: 12 }}>
-          Grad-CAM was requested, but the backend did not return an image.
-        </p>
       ) : null}
 
       {showSecurity ? (
