@@ -112,11 +112,34 @@ function normalizeApiResponse(data) {
     Object.entries(probsRaw).map(([k, v]) => [k, normalizePercent(v) ?? 0])
   );
 
+  const gradcamOverlay =
+    data.gradcam_overlay_b64 ||
+    data.gradcam?.overlay_b64 ||
+    data.compat?.gradcam?.overlay_b64 ||
+    null;
+
+  const gradcamHeatmap =
+    data.gradcam_heatmap_b64 ||
+    data.gradcam?.heatmap_b64 ||
+    data.compat?.gradcam?.heatmap_b64 ||
+    null;
+
+  const gradcamLayer = data.gradcam?.layer || data.compat?.gradcam?.layer || null;
+  const gradcamEnabled = Boolean(gradcamOverlay || gradcamHeatmap);
+  const gradcamError = data.gradcam?.error || data.compat?.gradcam?.error || null;
+
   return {
     success: true,
     session_id: data.session_id || null,
     prediction: { class: className, confidence, description },
     all_probabilities,
+    gradcam: {
+      enabled: gradcamEnabled,
+      layer: gradcamLayer,
+      overlay_b64: gradcamOverlay,
+      heatmap_b64: gradcamHeatmap,
+      error: gradcamError,
+    },
     security: data.security || null,
     storage: data.storage || null,
     elapsed_ms: typeof data.elapsed_ms === "number" ? data.elapsed_ms : null,
@@ -553,6 +576,47 @@ export default function App() {
         <div className="diagnosis-confidence">{safeConfidence.toFixed(1)}% Confidence</div>
         <div className="diagnosis-description">{safeDesc}</div>
       </div>
+
+      {prediction?.gradcam?.overlay_b64 ? (
+        <div className="probability-section" style={{ marginTop: 16 }}>
+          <h5 className="mb-3">Grad-CAM Explanation</h5>
+
+          {prediction.gradcam.layer ? (
+            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
+              Layer:{" "}
+              <span style={{ fontFamily: "monospace" }}>{prediction.gradcam.layer}</span>
+            </div>
+          ) : null}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Original</div>
+              {preview ? (
+                <img
+                  src={preview}
+                  alt="Original"
+                  style={{ width: "100%", borderRadius: 12 }}
+                />
+              ) : (
+                <p className="text-muted mb-0">Original preview not available.</p>
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Grad-CAM Overlay</div>
+              <img
+                src={`data:image/png;base64,${prediction.gradcam.overlay_b64}`}
+                alt="Grad-CAM Overlay"
+                style={{ width: "100%", borderRadius: 12 }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : prediction?.gradcam?.error ? (
+        <Alert variant="warning" className="mt-3">
+          <strong>Grad-CAM unavailable:</strong> {String(prediction.gradcam.error)}
+        </Alert>
+      ) : null}
 
       <div className="probability-section">
         <h5 className="mb-3">Probability Distribution</h5>
