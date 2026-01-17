@@ -157,7 +157,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [wantGradcam, setWantGradcam] = useState(true);
+  const [wantGradcam, setWantGradcam] = useState(false);
 
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const isCoolingDown = cooldownUntil > Date.now();
