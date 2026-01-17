@@ -9,6 +9,7 @@ import {
   Badge,
   Modal,
   Spinner,
+  Form,
 } from "react-bootstrap";
 import { useDropzone } from "react-dropzone";
 import {
@@ -117,6 +118,7 @@ function normalizeApiResponse(data) {
     session_id: data.session_id || null,
     prediction: { class: className, confidence, description },
     all_probabilities,
+    gradcam_image: data.gradcam_image || null,
     security: data.security || null,
     storage: data.storage || null,
     elapsed_ms: typeof data.elapsed_ms === "number" ? data.elapsed_ms : null,
@@ -154,6 +156,8 @@ export default function App() {
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [wantGradcam, setWantGradcam] = useState(true);
 
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const isCoolingDown = cooldownUntil > Date.now();
@@ -327,9 +331,14 @@ export default function App() {
     try {
       let lastErr = null;
 
-      for (const path of PREDICT_PATHS) {
+      const predictPaths = wantGradcam
+        ? ["/api/predict?gradcam=1", ...PREDICT_PATHS]
+        : PREDICT_PATHS;
+
+      for (const path of predictPaths) {
         try {
-          const res = await axios.post(joinUrl(API_BASE, path), formData, {            timeout: 300000,
+          const res = await axios.post(joinUrl(API_BASE, path), formData, {
+            timeout: 300000,
             withCredentials: false,
           });
 
@@ -480,6 +489,18 @@ export default function App() {
   const uploadSection = preview ? (
     <div className="preview-container">
       <img src={preview} alt="Preview" className="preview-image-modern" />
+
+      <div className="mt-3" style={{ display: "flex", justifyContent: "center" }}>
+        <Form.Check
+          type="switch"
+          id="gradcam-switch"
+          label="Generate Grad-CAM"
+          checked={wantGradcam}
+          onChange={(e) => setWantGradcam(e.target.checked)}
+          disabled={loading}
+        />
+      </div>
+
       <div className="button-group mt-4">
         <Button
           variant="primary"
@@ -579,6 +600,24 @@ export default function App() {
           <p className="text-muted mb-0">No probability distribution returned by the server.</p>
         )}
       </div>
+
+      {prediction.gradcam_image ? (
+        <div className="mt-4">
+          <h5 className="mb-2">Grad-CAM Visualization</h5>
+          <img
+            src={prediction.gradcam_image}
+            alt="Grad-CAM"
+            style={{ width: "100%", borderRadius: 12 }}
+          />
+          <p className="text-muted mt-2 mb-0" style={{ fontSize: 12 }}>
+            Highlighted regions indicate areas that most influenced the model’s decision.
+          </p>
+        </div>
+      ) : wantGradcam ? (
+        <p className="text-muted mt-3 mb-0" style={{ fontSize: 12 }}>
+          Grad-CAM was requested, but the backend did not return an image.
+        </p>
+      ) : null}
 
       {showSecurity ? (
         <Alert variant="light" className="security-alert mt-3">
