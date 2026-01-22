@@ -23,7 +23,18 @@ import {
 import axios from "axios";
 import "./index.css";
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_IMAGE_MB = 25;
+const ENV_MAX_IMAGE_BYTES = Number(import.meta.env.VITE_MAX_IMAGE_BYTES);
+const ENV_MAX_IMAGE_MB = Number(import.meta.env.VITE_MAX_IMAGE_MB);
+
+const MAX_FILE_BYTES =
+  Number.isFinite(ENV_MAX_IMAGE_BYTES) && ENV_MAX_IMAGE_BYTES > 0
+    ? Math.floor(ENV_MAX_IMAGE_BYTES)
+    : Number.isFinite(ENV_MAX_IMAGE_MB) && ENV_MAX_IMAGE_MB > 0
+    ? Math.floor(ENV_MAX_IMAGE_MB * 1024 * 1024)
+    : DEFAULT_MAX_IMAGE_MB * 1024 * 1024;
+
+const MAX_FILE_MB = Math.round((MAX_FILE_BYTES / (1024 * 1024)) * 10) / 10;
 const HEALTH_POLL_MS = 5000;
 
 const RAW_API_BASE = String(import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -277,7 +288,7 @@ export default function App() {
         if (prevUrl) URL.revokeObjectURL(prevUrl);
         return null;
       });
-      setError("File too large. Maximum allowed size is 10 MB.");
+      setError(`File too large. Maximum allowed size is ${MAX_FILE_MB} MB.`);
       return;
     }
 
@@ -292,7 +303,7 @@ export default function App() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "image/*": [".png", ".jpg", ".jpeg"] },
+    accept: { "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"] },
     multiple: false,
     disabled: loading,
   });
@@ -400,7 +411,11 @@ export default function App() {
       const { status, message } = extractServerError(e);
 
       if (status === 413) {
-        setError("File too large. Maximum allowed size is 10 MB.");
+        const limitBytes = Number(e?.response?.data?.limit);
+        const limitMb = Number.isFinite(limitBytes) && limitBytes > 0
+          ? Math.round((limitBytes / (1024 * 1024)) * 10) / 10
+          : MAX_FILE_MB;
+        setError(`File too large. Maximum allowed size is ${limitMb} MB.`);
       } else if (status === 429) {
         const retryAfter = Number(e?.response?.headers?.["retry-after"]);
         const waitMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : 60_000;
@@ -578,7 +593,7 @@ export default function App() {
         <FaUpload className="upload-icon" />
         <h4>Drop your image here</h4>
         <p>or click to browse</p>
-        <small className="text-muted">Supports: PNG, JPG, JPEG (max 10 MB)</small>
+        <small className="text-muted">Supports: PNG, JPG, JPEG (max {MAX_FILE_MB} MB)</small>
       </div>
     </div>
   );
