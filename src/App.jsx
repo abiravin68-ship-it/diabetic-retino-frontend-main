@@ -277,7 +277,7 @@ export default function App() {
         if (prevUrl) URL.revokeObjectURL(prevUrl);
         return null;
       });
-      setError("File too large. Maximum allowed size is 5 MB.");
+      setError("File too large. Maximum allowed size is 10 MB.");
       return;
     }
 
@@ -400,7 +400,7 @@ export default function App() {
       const { status, message } = extractServerError(e);
 
       if (status === 413) {
-        setError("File too large. Maximum allowed size is 5 MB.");
+        setError("File too large. Maximum allowed size is 10 MB.");
       } else if (status === 429) {
         const retryAfter = Number(e?.response?.headers?.["retry-after"]);
         const waitMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : 60_000;
@@ -578,7 +578,7 @@ export default function App() {
         <FaUpload className="upload-icon" />
         <h4>Drop your image here</h4>
         <p>or click to browse</p>
-        <small className="text-muted">Supports: PNG, JPG, JPEG (max 5 MB)</small>
+        <small className="text-muted">Supports: PNG, JPG, JPEG (max 10 MB)</small>
       </div>
     </div>
   );
