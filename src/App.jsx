@@ -130,6 +130,7 @@ function normalizeApiResponse(data) {
     prediction: { class: className, confidence, description },
     all_probabilities,
     gradcam_image: data.gradcam_image || null,
+    preprocess_debug: data.preprocess_debug || null,
     security: data.security || null,
     storage: data.storage || null,
     elapsed_ms: typeof data.elapsed_ms === "number" ? data.elapsed_ms : null,
@@ -170,6 +171,7 @@ export default function App() {
 
   const [wantGradcam, setWantGradcam] = useState(false);
   const [isPreprocessed, setIsPreprocessed] = useState(false);
+  const [wantPreprocessDebug, setWantPreprocessDebug] = useState(false);
   const [gradcamLoading, setGradcamLoading] = useState(false);
   const [gradcamNotice, setGradcamNotice] = useState("");
 
@@ -272,6 +274,7 @@ export default function App() {
     setError("");
     setPrediction(null);
     setIsPreprocessed(false);
+    setWantPreprocessDebug(false);
 
     const extOk = /\.(png|jpg|jpeg)$/i.test(file.name || "");
     if (!extOk) {
@@ -351,6 +354,7 @@ export default function App() {
       const params = new URLSearchParams();
       if (gradcam) params.set("gradcam", "1");
       if (isPreprocessed) params.set("preprocessed", "1");
+      if (wantPreprocessDebug) params.set("debug_preprocess", "1");
       const qs = params.toString();
       return joinUrl(API_BASE, qs ? `${path}?${qs}` : path);
     };
@@ -449,6 +453,7 @@ export default function App() {
   function handleClear() {
     setSelectedFile(null);
     setIsPreprocessed(false);
+    setWantPreprocessDebug(false);
     setPrediction(null);
     setError("");
     setGradcamNotice("");
@@ -572,9 +577,17 @@ export default function App() {
           <Form.Check
             type="switch"
             id="preprocessed-switch"
-            label="Preprocessed image (skip CLAHE)"
+            label="Image already preprocessed (skip CLAHE)"
             checked={isPreprocessed}
             onChange={(e) => setIsPreprocessed(e.target.checked)}
+            disabled={loading}
+          />
+          <Form.Check
+            type="switch"
+            id="preprocess-debug-switch"
+            label="Show preprocessing preview"
+            checked={wantPreprocessDebug}
+            onChange={(e) => setWantPreprocessDebug(e.target.checked)}
             disabled={loading}
           />
         </div>
@@ -707,6 +720,34 @@ export default function App() {
           ) : (
             <p className="text-muted mt-2 mb-0" style={{ fontSize: 12 }}>
               Grad-CAM was requested, but the backend did not return an image.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {wantPreprocessDebug ? (
+        <div className="mt-4">
+          <h5 className="mb-2">Preprocessing Preview</h5>
+
+          {prediction.preprocess_debug && prediction.preprocess_debug.enhanced_preview ? (
+            <>
+              <img
+                src={prediction.preprocess_debug.enhanced_preview}
+                alt="Preprocessed preview"
+                style={{ width: "100%", borderRadius: 12 }}
+              />
+              <p className="text-muted mt-2 mb-0" style={{ fontSize: 12 }}>
+                CLAHE applied:{" "}
+                {String(Boolean(prediction.preprocess_debug.clahe_applied))} • clipLimit:{" "}
+                {String(prediction.preprocess_debug.clahe_clip_limit)} • tileGrid:{" "}
+                {Array.isArray(prediction.preprocess_debug.clahe_tile_grid)
+                  ? prediction.preprocess_debug.clahe_tile_grid.join("×")
+                  : String(prediction.preprocess_debug.clahe_tile_grid)}
+              </p>
+            </>
+          ) : (
+            <p className="text-muted mt-2 mb-0" style={{ fontSize: 12 }}>
+              Preprocessing preview was requested, but the backend did not return it.
             </p>
           )}
         </div>
