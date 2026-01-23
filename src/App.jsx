@@ -169,6 +169,7 @@ export default function App() {
   const [error, setError] = useState("");
 
   const [wantGradcam, setWantGradcam] = useState(false);
+  const [isPreprocessed, setIsPreprocessed] = useState(false);
   const [gradcamLoading, setGradcamLoading] = useState(false);
   const [gradcamNotice, setGradcamNotice] = useState("");
 
@@ -270,6 +271,7 @@ export default function App() {
 
     setError("");
     setPrediction(null);
+    setIsPreprocessed(false);
 
     const extOk = /\.(png|jpg|jpeg)$/i.test(file.name || "");
     if (!extOk) {
@@ -345,15 +347,24 @@ export default function App() {
       fd.append("file", selectedFile);
       return fd;
     };
+    const buildPredictUrl = (path, { gradcam = false } = {}) => {
+      const params = new URLSearchParams();
+      if (gradcam) params.set("gradcam", "1");
+      if (isPreprocessed) params.set("preprocessed", "1");
+      const qs = params.toString();
+      return joinUrl(API_BASE, qs ? `${path}?${qs}` : path);
+    };
+
 
     try {
       // Phase 1: Always do the fast prediction first.
       let lastErr = null;
       let baseResult = null;
+      let predictPathUsed = PREDICT_PATHS[0];
 
       for (const path of PREDICT_PATHS) {
         try {
-          const res = await axios.post(joinUrl(API_BASE, path), makeFormData(), {
+          const res = await axios.post(buildPredictUrl(path), makeFormData(), {
             timeout: 300000,
             withCredentials: false,
           });
@@ -366,6 +377,7 @@ export default function App() {
 
           baseResult = normalized;
           setPrediction(normalized);
+          predictPathUsed = path;
           break;
         } catch (e) {
           lastErr = e;
@@ -379,7 +391,7 @@ export default function App() {
         setGradcamLoading(true);
         try {
           const res2 = await axios.post(
-            joinUrl(API_BASE, "/api/predict?gradcam=1"),
+            buildPredictUrl(predictPathUsed, { gradcam: true }),
             makeFormData(),
             {
               timeout: 300000,
@@ -436,6 +448,7 @@ export default function App() {
 
   function handleClear() {
     setSelectedFile(null);
+    setIsPreprocessed(false);
     setPrediction(null);
     setError("");
     setGradcamNotice("");
@@ -547,14 +560,24 @@ export default function App() {
       <img src={preview} alt="Preview" className="preview-image-modern" />
 
       <div className="mt-3" style={{ display: "flex", justifyContent: "center" }}>
-        <Form.Check
-          type="switch"
-          id="gradcam-switch"
-          label="Generate Grad-CAM"
-          checked={wantGradcam}
-          onChange={(e) => setWantGradcam(e.target.checked)}
-          disabled={loading}
-        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <Form.Check
+            type="switch"
+            id="gradcam-switch"
+            label="Generate Grad-CAM"
+            checked={wantGradcam}
+            onChange={(e) => setWantGradcam(e.target.checked)}
+            disabled={loading}
+          />
+          <Form.Check
+            type="switch"
+            id="preprocessed-switch"
+            label="Preprocessed image (skip CLAHE)"
+            checked={isPreprocessed}
+            onChange={(e) => setIsPreprocessed(e.target.checked)}
+            disabled={loading}
+          />
+        </div>
       </div>
 
       <div className="button-group mt-4">
